@@ -30,14 +30,14 @@ PROJECT_ROOT_PATH = Path(__file__).parent.parent / "YFINANCE"
 def yahoo_finance_pipeline():
     ensure_schema_exist = SnowflakeSqlApiOperator(
         task_id="yfinance_table_check",
-        SF_CONN=SF_CONN,
+        snowflake_conn_id=SF_CONN,
         sql=f"""
     CREATE SCHEMA IF NOT EXISTS {SF_DB}.{SF_SCHEMA};
     """,
     )
     ensure_table_exist = SnowflakeSqlApiOperator(
         task_id="create_table",
-        SF_CONN=SF_CONN,
+        snowflake_conn_id=SF_CONN,
         sql=f"""
             CREATE TABLE IF NOT EXISTS {SF_DB}.{SF_SCHEMA}.{YAHOO_TABLE} (
                 DATE TIMESTAMP_NTZ,
