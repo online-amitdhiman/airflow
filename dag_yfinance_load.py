@@ -5,9 +5,8 @@ import pendulum
 from pathlib import Path
 from airflow.decorators import dag, task
 from airflow.operators.empty import EmptyOperator
-from cosmos import DbtTaskGroup, ProjectConfig, ProfileConfig, ExecutionConfig
 from airflow.providers.snowflake.operators.snowflake import SnowflakeSqlApiOperator
-from include.yfinance_loader import fetch_and_load_stock_data  # Import our function
+from src.yfinance_loader import fetch_and_load_stock_data  # Import our function
 
 # --- Configuration ---
 SF_CONN = "snowflake_FQ15637"
@@ -18,19 +17,6 @@ TICKERS_TO_FETCH = ["MSFT", "AAPL", "GOOGL"]
 
 # dbt Configuration
 PROJECT_ROOT_PATH = Path(__file__).parent.parent / "YFINANCE"
-
-# IMPORTANT: Ensure profile in dbt/yahoo_finance_dbt/profiles.yml
-# points to your Snowflake account correctly AND uses secure credential methods
-# (e.g., environment variables set by Airflow connection, NOT hardcoded passwords)
-DBT_PROFILE_CONFIG = ProfileConfig(
-    profile_name="yahoo_finance_profile",  # Must match profiles.yml
-    target_name="dev",  # Must match profiles.yml
-    profiles_yml_filepath=PROJECT_ROOT_PATH / "profiles.yml",
-)
-DBT_EXECUTION_CONFIG = ExecutionConfig(
-    dbt_executable_path=str(DBT_EXECUTABLE),
-)
-
 
 # --- /Configuration ---
 @dag(
@@ -43,28 +29,28 @@ DBT_EXECUTION_CONFIG = ExecutionConfig(
 )
 def yahoo_finance_pipeline():
     ensure_schema_exist = SnowflakeSqlApiOperator(
-        task_id="ensure_schema_exist",
+        task_id="yfinance_table_check",
         SF_CONN=SF_CONN,
         sql=f"""
     CREATE SCHEMA IF NOT EXISTS {SF_DB}.{SF_SCHEMA};
     """,
     )
     ensure_table_exist = SnowflakeSqlApiOperator(
-        task_id="ensure_table_exist",
+        task_id="create_table",
         SF_CONN=SF_CONN,
         sql=f"""
-    CREATE TABLE IF NOT EXISTS {SF_DB}.{SF_SCHEMA}.{YAHOO_TABLE} (
-        DATE TIMESTAMP_NTZ,
-        OPEN FLOAT,
-        HIGH FLOAT,
-        LOW FLOAT,
-        CLOSE FLOAT,
-        ADJ_CLOSE FLOAT,
-        VOLUME NUMBER,
-        DIVIDENDS FLOAT,
-        STOCK_SPLITS FLOAT,
-        TICKER VARCHAR,
-        LOADTIMESTAMP TIMESTAMP_NTZ
+            CREATE TABLE IF NOT EXISTS {SF_DB}.{SF_SCHEMA}.{YAHOO_TABLE} (
+                DATE TIMESTAMP_NTZ,
+                OPEN FLOAT,
+                HIGH FLOAT,
+                LOW FLOAT,
+                CLOSE FLOAT,
+                ADJ_CLOSE FLOAT,
+                VOLUME NUMBER,
+                DIVIDENDS FLOAT,
+                STOCK_SPLITS FLOAT,
+                TICKER VARCHAR,
+                LOADTIMESTAMP TIMESTAMP_NTZ
     );
     """,
     )
@@ -111,16 +97,6 @@ def yahoo_finance_pipeline():
         logical_date="{{ ds }}",  # Pass logical_date using Airflow's macro
     )
 
-    # Define the dbt task group using Cosmos
-    # This will run all models in your dbt project by default
-    transform_data = DbtTaskGroup(
-        group_id="dbt_transform_yahoo",
-        project_config=ProjectConfig(DBT_PROJECT_PATH),
-        profile_config=DBT_PROFILE_CONFIG,
-        execution_config=DBT_EXECUTION_CONFIG,
-        operator_args={"install_deps": True},
-    )
-
     start = EmptyOperator(task_id="start")
     end = EmptyOperator(task_id="end")
 
@@ -130,7 +106,6 @@ def yahoo_finance_pipeline():
         >> ensure_schema_exist
         >> ensure_table_exist
         >> fetch_and_load_task
-        >> transform_data
         >> end
     )
 
