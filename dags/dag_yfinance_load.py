@@ -9,7 +9,7 @@ from airflow.providers.snowflake.operators.snowflake import SnowflakeSqlApiOpera
 from src.yfinance_loader import fetch_and_load_stock_data  # Import our function
 
 # --- Configuration ---
-SF_CONN = "snowflake_FQ15637"
+SF_CONN = "SF_CONN"
 SF_DB = "YFINANCE"
 SF_SCHEMA = "PUBLIC"
 YAHOO_TABLE = "PRICE_HISTORY"
