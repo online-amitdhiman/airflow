@@ -10,6 +10,56 @@ import logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+def write_snowflake(all_data, snowflake_conn_id, database, schema, table_name, chunk_size):
+    # Combine dataframes
+    combined_df = pd.concat(all_data, ignore_index=True)
+    log.info(f"Combined DataFrame shape: {combined_df.shape}")
+
+    # Ensure column names match Snowflake table (case-insensitive by default with write_pandas)
+    # Quote column names with spaces to avoid SQL syntax errors
+    combined_df.columns = combined_df.columns.str.replace(" ", "_").str.upper()
+
+    log.info(
+        f"Attempting to load {combined_df.shape[0]} rows into Snowflake table {database}.{schema}.{table_name}"
+    )
+    print(combined_df.columns)
+
+    conn = None  # Initialize conn to avoid unbound variable error
+    try:
+        # Get Snowflake hook
+        hook = SnowflakeHook(snowflake_conn_id=snowflake_conn_id)
+        # Get a connection object (important for write_pandas)
+        conn = hook.get_conn()
+
+        # Use write_pandas for efficient bulk loading from DataFrame
+        # Note: This performs individual INSERT statements in batches behind the scenes,
+        # it's NOT using COPY INTO. For very large volumes, staging + COPY INTO is faster.
+        success, nchunks, nrows, _ = write_pandas(
+            conn=conn,
+            df=combined_df,
+            table_name=table_name.upper(),  # write_pandas often expects uppercase
+            schema=schema.upper(),
+            database=database.upper(),
+            chunk_size=chunk_size,
+            use_logical_type=True,  # Ensure proper handling of datetime with timezone
+        )
+
+        if success:
+            log.info(f"Successfully loaded {nrows} rows in {nchunks} chunks.")
+        else:
+            # This part might not be reached if write_pandas raises an exception on failure
+            log.error("Snowflake write_pandas reported failure.")
+            raise AirflowException("Snowflake write_pandas failed.")
+
+    except Exception as e:
+        log.error(f"Error loading data into Snowflake: {e}")
+        raise AirflowException(f"Snowflake loading error: {e}")
+    finally:
+        # Ensure connection is closed
+        if "conn" in locals() and conn is not None:
+            conn.close()
+            log.info("Snowflake connection closed.")    
+
 
 def fetch_and_load_stock_data(
     tickers: list[str],
@@ -69,6 +119,16 @@ def fetch_and_load_stock_data(
 
         except Exception as e:
             log.error(f"Failed to fetch data for ticker {ticker_symbol}: {e}")
+
+            if all_data:
+                write_snowflake(all_data=all_data, 
+                                snowflake_conn_id=snowflake_conn_id,
+                                database=database,
+                                schema=schema,
+                                table_name=table_name,
+                                chunk_size=chunk_size
+                                )
+                all_data = all_data.clear()
             # Decide if you want to raise an error and fail the task or just continue
             # raise AirflowException(f"Failed to fetch data for {ticker_symbol}")
 
@@ -76,51 +136,10 @@ def fetch_and_load_stock_data(
         log.warning("No data fetched for any ticker. Skipping Snowflake load.")
         return
 
-    # Combine dataframes
-    combined_df = pd.concat(all_data, ignore_index=True)
-    log.info(f"Combined DataFrame shape: {combined_df.shape}")
-
-    # Ensure column names match Snowflake table (case-insensitive by default with write_pandas)
-    # Quote column names with spaces to avoid SQL syntax errors
-    combined_df.columns = combined_df.columns.str.replace(" ", "_").str.upper()
-
-    log.info(
-        f"Attempting to load {combined_df.shape[0]} rows into Snowflake table {database}.{schema}.{table_name}"
-    )
-    print(combined_df.columns)
-
-    conn = None  # Initialize conn to avoid unbound variable error
-    try:
-        # Get Snowflake hook
-        hook = SnowflakeHook(snowflake_conn_id=snowflake_conn_id)
-        # Get a connection object (important for write_pandas)
-        conn = hook.get_conn()
-
-        # Use write_pandas for efficient bulk loading from DataFrame
-        # Note: This performs individual INSERT statements in batches behind the scenes,
-        # it's NOT using COPY INTO. For very large volumes, staging + COPY INTO is faster.
-        success, nchunks, nrows, _ = write_pandas(
-            conn=conn,
-            df=combined_df,
-            table_name=table_name.upper(),  # write_pandas often expects uppercase
-            schema=schema.upper(),
-            database=database.upper(),
-            chunk_size=chunk_size,
-            use_logical_type=True,  # Ensure proper handling of datetime with timezone
-        )
-
-        if success:
-            log.info(f"Successfully loaded {nrows} rows in {nchunks} chunks.")
-        else:
-            # This part might not be reached if write_pandas raises an exception on failure
-            log.error("Snowflake write_pandas reported failure.")
-            raise AirflowException("Snowflake write_pandas failed.")
-
-    except Exception as e:
-        log.error(f"Error loading data into Snowflake: {e}")
-        raise AirflowException(f"Snowflake loading error: {e}")
-    finally:
-        # Ensure connection is closed
-        if "conn" in locals() and conn is not None:
-            conn.close()
-            log.info("Snowflake connection closed.")
+    write_snowflake(all_data=all_data, 
+                    snowflake_conn_id=snowflake_conn_id,
+                    database=database,
+                    schema=schema,
+                    table_name=table_name,
+                    chunk_size=chunk_size
+                    )
