@@ -72,7 +72,7 @@ def yahoo_finance_pipeline():
         # logical_date is the *start* of the DAG run interval
         end_date_str = logical_date
         start_date = pendulum.from_format(logical_date, "YYYY-MM-DD", tz="UTC")
-        start_date = start_date.subtract(days=1)  # Use subtract for clarity
+        start_date = start_date.subtract(days=365)  # Use subtract for clarity
         start_date_str = start_date.to_date_string()
         print(
             f"Fetching data from {start_date_str} up to (but not including) {end_date_str}"
