@@ -32,7 +32,7 @@ def yahoo_finance_pipeline():
     ensure_schema_exist = SnowflakeSqlApiOperator(
         task_id="yfinance_table_check",
         snowflake_conn_id=SF_CONN,
-        sql="""
+        sql=f"""
                 CREATE SCHEMA IF NOT EXISTS {SF_DB}.{SF_SCHEMA};
             """,
     )
