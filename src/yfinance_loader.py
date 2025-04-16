@@ -5,10 +5,31 @@ from airflow.exceptions import AirflowException
 from snowflake.connector.pandas_tools import write_pandas
 from pendulum import now
 import logging
+from abc import ABC, abstractmethod
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+
+class DataFetcherStrategy(ABC):
+    @abstractmethod
+    def fetch_data(self, ticker_symbol, start_date_str, end_date_str):
+        pass
+
+class YahooFinanceFetcher(DataFetcherStrategy):
+    def fetch_data(self, ticker_symbol, start_date_str, end_date_str):
+        ticker = yf.Ticker(ticker_symbol)
+        hist = ticker.history(start=start_date_str, end=end_date_str)
+        if hist.empty:
+            log.warning(f"No data returned for ticker: {ticker_symbol}")
+            return None
+        return hist
+
+class SnowflakeConnectionFactory:
+    @staticmethod
+    def create_connection(snowflake_conn_id):
+        hook = SnowflakeHook(snowflake_conn_id=snowflake_conn_id)
+        return hook.get_conn()
 
 def write_snowflake(all_data, snowflake_conn_id, database, schema, table_name, chunk_size):
     # Combine dataframes
@@ -26,10 +47,8 @@ def write_snowflake(all_data, snowflake_conn_id, database, schema, table_name, c
 
     conn = None  # Initialize conn to avoid unbound variable error
     try:
-        # Get Snowflake hook
-        hook = SnowflakeHook(snowflake_conn_id=snowflake_conn_id)
-        # Get a connection object (important for write_pandas)
-        conn = hook.get_conn()
+        # Get Snowflake connection using factory
+        conn = SnowflakeConnectionFactory.create_connection(snowflake_conn_id)
 
         # Use write_pandas for efficient bulk loading from DataFrame
         # Note: This performs individual INSERT statements in batches behind the scenes,
@@ -67,12 +86,13 @@ def fetch_and_load_stock_data(
     table_name: str,
     schema: str,
     database: str,
-    start_date_str: str,  # Expecting 'YYYY-MM-DD' format
-    end_date_str: str,  # Expecting 'YYYY-MM-DD' format
-    chunk_size: int = 10000,  # Adjust chunk size for write_pandas based on memory/performance
+    start_date_str: str,
+    end_date_str: str,
+    chunk_size: int = 10000,
+    fetcher_strategy: DataFetcherStrategy = YahooFinanceFetcher(),
 ):
     """
-    Fetches historical stock data for given tickers using yfinance and loads it
+    Fetches historical stock data for given tickers using a data fetching strategy and loads it
     directly into a specified Snowflake table using SnowflakeHook and write_pandas.
 
     Args:
@@ -84,6 +104,7 @@ def fetch_and_load_stock_data(
         start_date_str (str): Start date for historical data ('YYYY-MM-DD').
         end_date_str (str): End date for historical data ('YYYY-MM-DD').
         chunk_size (int): Number of rows to write per chunk in write_pandas.
+        fetcher_strategy (DataFetcherStrategy): Strategy for fetching data.
     """
     all_data = []
     load_timestamp = now("UTC").to_iso8601_string()
@@ -95,25 +116,13 @@ def fetch_and_load_stock_data(
 
     for ticker_symbol in tickers:
         try:
-            ticker = yf.Ticker(ticker_symbol)
-            # Fetch history for the specified period
-            # yfinance interval defaults work well for daily data
-            hist = ticker.history(start=start_date_str, end=end_date_str)
-
-            if hist.empty:
-                log.warning(f"No data returned for ticker: {ticker_symbol}")
+            hist = fetcher_strategy.fetch_data(ticker_symbol, start_date_str, end_date_str)
+            if hist is None:
                 continue
 
-            # Add ticker symbol and load timestamp
             hist["TICKER"] = ticker_symbol
             hist["LOADTIMESTAMP"] = load_timestamp
-
-            # Reset index to make Date a column
             hist.reset_index(inplace=True)
-
-            # Standardize column names slightly if needed (e.g., remove spaces)
-            # hist.columns = hist.columns.str.replace(' ', '') # Example
-
             all_data.append(hist)
             log.info(f"Successfully fetched data for {ticker_symbol}")
 
@@ -129,9 +138,7 @@ def fetch_and_load_stock_data(
                                 table_name=table_name,
                                 chunk_size=chunk_size
                                 )
-                all_data = all_data.clear()
-            # Decide if you want to raise an error and fail the task or just continue
-            # raise AirflowException(f"Failed to fetch data for {ticker_symbol}")
+                all_data.clear()
 
     if not all_data:
         log.warning("No data fetched for any ticker. Skipping Snowflake load.")

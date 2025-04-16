@@ -2,13 +2,19 @@
 
 This project is a Proof of Concept (POC) for integrating Astronomer with Snowflake. It demonstrates how to fetch historical stock data using the `yfinance` library and load it into a Snowflake database. The pipeline is containerized and leverages the Astronomer runtime for orchestration.
 
+## Updated Features
+
+- Implements the Strategy design pattern for data fetching, allowing easy extension for other data sources.
+- Uses the Factory design pattern for creating Snowflake connections, improving modularity.
+- Includes unit tests for key components to ensure reliability.
+
 ## Features
 
 - Fetches historical stock data for a configurable list of tickers.
 - Loads the data into a Snowflake table using the `write_pandas` method for efficient bulk loading.
 - Fully containerized setup for easy deployment.
 
-## Project Structure
+## Updated Project Structure
 
 ```
 ├── Dockerfile                # Docker configuration for the Airflow environment
@@ -18,6 +24,8 @@ This project is a Proof of Concept (POC) for integrating Astronomer with Snowfla
 │   └── dag_yfinance_load.py  # DAG definition
 ├── src/
 │   └── yfinance_loader.py    # Logic for fetching and loading stock data
+├── tests/
+│   └── test_yfinance_loader.py # Unit tests for the yfinance_loader module
 ```
 
 ## Prerequisites
