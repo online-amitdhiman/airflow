@@ -4,9 +4,16 @@ SF_DB = "YFINANCE"
 SF_SCHEMA = "PUBLIC"
 YFINANCE_TABLE = "PRICE_HISTORY"
 
+# Default chunk size for Snowflake writes
+CHUNK_SIZE = 10000
+
+# Date range for fetching historical data
+START_DATE = "2000-01-01"
+END_DATE = "2025-04-15"
+
 # List of ticker symbols
 TICKER_SYMBOLS = [
-"AAL",
+    "AAL",
 "AAM",
 "AAP",
 "AAT",
@@ -1978,4 +1985,6 @@ TICKER_SYMBOLS = [
 "ZTO",
 "ZTR",
 "ZTS",
-"ZWS"]
+"ZWS"
+]
+

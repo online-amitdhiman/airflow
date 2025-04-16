@@ -11,6 +11,13 @@ from abc import ABC, abstractmethod
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+# Add a file handler to log to a file
+file_handler = logging.FileHandler("yfinance_loader.log")
+file_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+log.addHandler(file_handler)
+
 class DataFetcherStrategy(ABC):
     @abstractmethod
     def fetch_data(self, ticker_symbol, start_date_str, end_date_str):
