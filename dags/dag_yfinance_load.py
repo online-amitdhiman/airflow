@@ -33,11 +33,9 @@ def yahoo_finance_pipeline():
         task_id="yfinance_table_check",
         snowflake_conn_id=SF_CONN,
         sql="""
-                SELECT CURRENT_DATE;
+                CREATE SCHEMA IF NOT EXISTS {SF_DB}.{SF_SCHEMA};
             """,
     )
-            # CREATE SCHEMA IF NOT EXISTS {SF_DB}.{SF_SCHEMA};
-    
     ensure_table_exist = SnowflakeSqlApiOperator(
         task_id="create_table",
         snowflake_conn_id=SF_CONN,
