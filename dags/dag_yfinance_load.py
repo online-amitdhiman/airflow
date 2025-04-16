@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pendulum
-
+import base64, os
 from pathlib import Path
 from airflow.decorators import dag, task
 from airflow.operators.empty import EmptyOperator
@@ -12,9 +12,10 @@ from src.yfinance_loader import fetch_and_load_stock_data  # Import our function
 SF_CONN = "SF_CONN"
 SF_DB = "YFINANCE"
 SF_SCHEMA = "PUBLIC"
-YAHOO_TABLE = "PRICE_HISTORY"
+YFINANCE_TABLE = "PRICE_HISTORY"
 TICKERS_TO_FETCH = ["MSFT", "AAPL", "GOOGL"]
 
+private_key = base64.b64decode(os.getenv("SF_FQ15637_PRIVATE_KEY"))
 # dbt Configuration
 PROJECT_ROOT_PATH = Path(__file__).parent.parent / "YFINANCE"
 
@@ -31,15 +32,17 @@ def yahoo_finance_pipeline():
     ensure_schema_exist = SnowflakeSqlApiOperator(
         task_id="yfinance_table_check",
         snowflake_conn_id=SF_CONN,
-        sql=f"""
-    CREATE SCHEMA IF NOT EXISTS {SF_DB}.{SF_SCHEMA};
-    """,
+        sql="""
+                SELECT CURRENT_DATE;
+            """,
     )
+            # CREATE SCHEMA IF NOT EXISTS {SF_DB}.{SF_SCHEMA};
+    
     ensure_table_exist = SnowflakeSqlApiOperator(
         task_id="create_table",
         snowflake_conn_id=SF_CONN,
         sql=f"""
-            CREATE TABLE IF NOT EXISTS {SF_DB}.{SF_SCHEMA}.{YAHOO_TABLE} (
+            CREATE TABLE IF NOT EXISTS {SF_DB}.{SF_SCHEMA}.{YFINANCE_TABLE} (
                 DATE TIMESTAMP_NTZ,
                 OPEN FLOAT,
                 HIGH FLOAT,
@@ -93,7 +96,7 @@ def yahoo_finance_pipeline():
         conn_id=SF_CONN,
         db=SF_DB,
         schema=SF_SCHEMA,
-        table=YAHOO_TABLE,
+        table=YFINANCE_TABLE,
         logical_date="{{ ds }}",  # Pass logical_date using Airflow's macro
     )
 
