@@ -121,6 +121,7 @@ def fetch_and_load_stock_data(
             log.error(f"Failed to fetch data for ticker {ticker_symbol}: {e}")
 
             if all_data:
+                log.info('Storing into Snowflake ...')
                 write_snowflake(all_data=all_data, 
                                 snowflake_conn_id=snowflake_conn_id,
                                 database=database,
