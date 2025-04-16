@@ -80,7 +80,7 @@ def yahoo_finance_pipeline():
 
         fetch_and_load_stock_data(
             tickers=tickers,
-            SF_CONN=conn_id,
+            snowflake_conn_id=conn_id,
             database=db,
             schema=schema,
             table_name=table,
