@@ -15,7 +15,7 @@ SF_SCHEMA = "PUBLIC"
 YFINANCE_TABLE = "PRICE_HISTORY"
 TICKERS_TO_FETCH = ["MSFT", "AAPL", "GOOGL"]
 
-private_key = base64.b64decode(os.getenv("SF_FQ15637_PRIVATE_KEY"))
+# private_key = base64.b64decode(os.getenv("SF_FQ15637_PRIVATE_KEY"))
 # dbt Configuration
 PROJECT_ROOT_PATH = Path(__file__).parent.parent / "YFINANCE"
 
